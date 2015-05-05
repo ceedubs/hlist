@@ -11,62 +11,47 @@ final case class HCons[H, T <: HList](head: H, tail: T) extends HList {
 }
 
 object HList {
-  type HNil = hlist.HNil.type
+  type HNil = HNil.type
 
-  final implicit class HListOps[L <: HList](val l: L) extends AnyVal {
+  implicit final class HListOps[L <: HList](l: L) {
     def ::[H](h: H): HCons[H, L] = HCons(h, l)
 
-    def map[F <: HFunction](implicit m: Mapper[F, L]): m.Out = m.apply(l)
+    def map[P <: Poly](implicit f: Mapper[P, L]): L = f(l)
   }
 }
 
-trait Mapper[F <: HFunction, L <: HList] {
-  type Out <: HList
-
-  def apply(l: L): Out
+trait Mapper[P <: Poly, L <: HList] {
+  def apply(l: L): L
 }
 
 object Mapper {
-  type Aux[F <: HFunction, L <: HList, O <: HList] = Mapper[F, L] {
-    type Out = O
-  }
-
-  implicit def mapperHNil[F <: HFunction]: Aux[F, HNil, HNil] = new Mapper[F, HNil] {
-    type Out = HNil
-
+  implicit def mapperHNil[P <: Poly]: Mapper[P, HNil] = new Mapper[P, HNil] {
     def apply(l: HNil) = HNil
   }
 
-  implicit def mapperHCons[F <: HFunction, H, T <: HList](implicit caseH: Case[F, H], mapperT: Mapper[F, T]): Aux[F, H :: T, caseH.Out :: mapperT.Out] = new Mapper[F, H :: T] {
-    type Out = caseH.Out :: mapperT.Out
-
-    def apply(l: H :: T) = caseH(l.head) :: mapperT(l.tail)
+  implicit def mapperHCons[P <: Poly, H, T <: HList](implicit caseH: Case[P, H], mapperT: Mapper[P, T]): Mapper[P, H :*: T] = new Mapper[P, H :*: T] {
+    def apply(l: H :*: T) = caseH(l.head) :: mapperT(l.tail)
   }
 }
 
-trait Case[F <: HFunction, A] {
-  type Out
-
-  def apply(a: A): Out
+trait Case[P <: Poly, A] {
+  def apply(a: A): A
 }
 
 object Case {
-  type Aux[F <: HFunction, A, B] = Case[F, A] {
-    type Out = B
-  }
-
-  def apply[F <: HFunction, A, B](f: A => B): Aux[F, A, B] = new Case[F, A] {
-    type Out = B
-
+  def apply[P <: Poly, A](f: A => A): Case[P, A] = new Case[P, A] {
     def apply(a: A) = f(a)
   }
 }
 
-trait HFunction {
-  def at[A, B](f: A => B): Case.Aux[this.type, A, B] = Case(f)
+trait Poly
+
+object Foo extends Poly {
+  implicit val caseInt: Case[Foo.type, Int] = Case(_ + 1)
+
+  implicit val caseString: Case[Foo.type, String] = Case(_ + "-modified")
 }
 
-object Foo extends HFunction {
-  implicit val atInt = at[Int, Double](_ * 2.5)
-  implicit val atString = at[String, Option[Char]](_.headOption)
+object Identity extends Poly {
+   implicit def atA[A]: Case[Identity.type, A] = Case(identity)
 }

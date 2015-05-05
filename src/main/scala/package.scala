@@ -1,3 +1,3 @@
 package object hlist {
-  type ::[H, T <: HList] = HCons[H, T]
+  type :*:[H, T <: HList] = HCons[H, T]
 }
